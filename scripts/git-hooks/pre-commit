@@ -1,0 +1,42 @@
+#!/bin/bash
+# pre-commit — fast secret scan over staged changes.
+# Blocks history entry itself, so secrets cannot leak before push.
+# Heavier verification (shellcheck, syntax, JSON) is performed by pre-push.
+
+set -euo pipefail
+
+PATTERNS=(
+  'sk-ant-api[0-9]{2}-[A-Za-z0-9_-]{40,}'
+  'sk-[A-Za-z0-9]{32,}'
+  'gh[ps]_[A-Za-z0-9]{36}'
+  'AKIA[0-9A-Z]{16}'
+  'xox[baprs]-[A-Za-z0-9-]{10,}'
+  '/Users/[a-z][a-z0-9._-]+/'
+  'ANTHROPIC_API_KEY[[:space:]]*=[[:space:]]*[^$"'"'"'[:space:]]'
+)
+
+# Staged files (Added/Copied/Modified only)
+files=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$files" ] && exit 0
+
+matched=0
+for pat in "${PATTERNS[@]}"; do
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    [ -f "$f" ] || continue
+    if git show ":$f" 2>/dev/null | grep -IE --color=never "$pat" >/dev/null 2>&1; then
+      echo "❌ Suspicious secret/absolute-path pattern in: $f" >&2
+      echo "   pattern: $pat" >&2
+      matched=1
+    fi
+  done <<< "$files"
+done
+
+if [ "$matched" -eq 1 ]; then
+  echo "" >&2
+  echo "Commit blocked. Review the flagged lines and remove the secret/absolute-path," >&2
+  echo "or bypass with --no-verify if it is a false positive (own the consequences)." >&2
+  exit 1
+fi
+
+exit 0

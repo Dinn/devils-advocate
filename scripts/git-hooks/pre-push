@@ -1,0 +1,6 @@
+#!/bin/bash
+# pre-push — full preflight verification before push.
+# A failure blocks the push. Bypass with --no-verify (own the consequences).
+
+set -euo pipefail
+exec "$(dirname "$0")/../preflight.sh" "$@"
