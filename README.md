@@ -27,7 +27,7 @@ The development setup additionally requires `shellcheck` for `scripts/preflight.
 In a Claude Code session:
 
 ```
-/plugin marketplace add Dinn/devils-advocate
+/plugin marketplace add dinn/devils-advocate
 /plugin install devils-advocate@devils-advocate
 ```
 
@@ -115,14 +115,18 @@ The `reasoning` field stays English regardless. The prompt-critic does not honor
 
 ## Privacy
 
-This plugin sends data to the Anthropic API on **every assistant turn** (response-critic, always) and on **prompts where the main Claude opts to dispatch the subagent** (prompt-critic, sometimes). The `/devils-advocate` skill sends file contents and project structure when manually invoked.
+This plugin sends data to the Anthropic API on **every** user turn and **every** Claude response, in the projects where it is enabled:
 
-Do not enable this plugin in projects whose contents must not leave your environment. There is no per-project disable yet (planned); disable globally and re-enable only in non-sensitive workspaces.
+- `prompt-critic` injects an instruction into the main session every turn. When the main Claude decides to dispatch, the user prompt + subagent reasoning is sent to Opus. When it does not dispatch, no extra API call is made.
+- `response-critic` sends Claude's **response text** to Haiku or Opus on **every** assistant turn (asynchronous background)
+- `/devils-advocate` skill, when invoked, may send file contents and project structure to Opus
+
+If you work on code that should not leave your environment, do not enable this plugin in those projects. There is currently no per-project disable option (planned for a future version); the recommended workaround is to disable the plugin globally and re-enable it only in non-sensitive workspaces.
 
 ## Development
 
 ```bash
-git clone https://github.com/Dinn/devils-advocate.git
+git clone https://github.com/dinn/devils-advocate.git
 cd devils-advocate
 
 # One-time: activate git hooks (pre-commit secret scan, pre-push preflight)
