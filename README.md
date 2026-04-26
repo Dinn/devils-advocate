@@ -29,7 +29,9 @@ All three honor a strict **silence rule**: when uncertain, they default to no ou
 - `bash` (4+)
 - `python3`
 - `jq`
-- An Anthropic API account or Claude Code OAuth login (used by the hooks to invoke `claude -p`)
+- An authenticated Claude Code session (OAuth or `ANTHROPIC_API_KEY`) — used by the response-critic background worker to invoke `claude -p`. The prompt-critic does not call the API directly; it injects an instruction, and the main Claude (already authenticated) handles any subagent dispatch.
+
+The development setup additionally requires `shellcheck` for `scripts/preflight.sh`. End users do not need it.
 
 ## Install
 
@@ -115,6 +117,21 @@ Skill (Opus + extended thinking)
 | `output_language` | unset | When set (e.g. `"Korean"`), forces user-facing strings produced by the response-critic into that language. When unset, falls back to `$LC_ALL` / `$LANG`, then English |
 
 The `output_language` priority chain is: `config.output_language` > `LC_ALL` > `LANG` > `English`.
+
+## Output language
+
+The response-critic produces user-facing strings (the `concerns` field) in a runtime-chosen language:
+
+1. `config.json`'s `output_language` field — explicit override (e.g. `"Korean"`)
+2. The `LC_ALL` environment variable (POSIX locale, e.g. `ko_KR.UTF-8`)
+3. The `LANG` environment variable (POSIX locale)
+4. English (final fallback)
+
+Currently mapped language names: **English**, **Korean**, **Japanese**, **Chinese**, **Spanish**, **French**, **German**, **Portuguese**, **Russian**. Unknown locale codes silently fall back to English. To add a language, extend the `locale_to_language` switch in `lib/common.sh` and submit a PR.
+
+The `reasoning` field in the model output stays in English regardless of the locale, so the maintainer can read debug logs uniformly.
+
+The prompt-critic dispatches the `devils-advocate-critic` subagent and does not honor `output_language` itself — the subagent's output language follows the main Claude's natural conversational language, which typically matches what the user is writing in.
 
 ## Privacy
 
