@@ -1,13 +1,6 @@
 # devils-advocate
 
-A multi-axis confirmation-bias guard for [Claude Code](https://docs.claude.com/en/docs/agents-and-tools/claude-code/overview).
-
-When you work with an AI coding assistant, two biases compound silently:
-
-1. **Your own confirmation bias** — the prompt you just typed may rest on assumptions you never verified.
-2. **The assistant's author bias** — Claude tends to defend the reasoning of the answer it just produced.
-
-This plugin pushes back on both. It runs three independent critics, each tuned for a different moment in the loop. The two automatic hooks are **complementary guards** — they nudge the main Claude rather than gating its response — and the manual skill is a foreground deep review.
+A complementary confirmation-bias guard for [Claude Code](https://docs.claude.com/en/docs/agents-and-tools/claude-code/overview). Three reviewers — two automatic hooks (best-effort, model-judgment-driven) and one manual skill (foreground deep critique) — push back on the user's unverified assumptions and the assistant's author bias.
 
 ## Components
 
@@ -17,11 +10,7 @@ This plugin pushes back on both. It runs three independent critics, each tuned f
 | **response-critic** | `Stop` hook | Background worker calls `claude -p` on the last assistant turn; severity-gated enqueue | Haiku → Opus auto-escalate | Declarative ("This skips Y; consider Z.") | Surfaces on the *next* `UserPromptSubmit` via the queue |
 | **/devils-advocate** skill | Manual invocation | Foreground critique with Context Gate + Independence Gate | Opus + extended thinking | Binary PASS/FAIL with concrete fixes | Inline report; dispatches `devils-advocate-critic` subagent when the target is self-authored, to block author bias |
 
-All three honor a strict **silence rule**: when uncertain, they default to no output. Forced objection is worse than no objection.
-
-- The async **response-critic** drops severity below `medium` and deduplicates by reasoning hash before enqueuing.
-- The **prompt-critic**'s silence is delegated: the main Claude skips dispatch on trivial prompts, and the subagent enforces its own silence rule on what it does see. There is **no hard guarantee that dispatch happens** — this is intentional: the plugin is a complementary guard, not a hard gate.
-- The **/devils-advocate skill** runs only when manually invoked, so it is silent by default.
+All three honor a strict **silence rule**: when uncertain, stay silent. The response-critic drops severity below `medium` and dedups by reasoning hash. The prompt-critic delegates silence to the main Claude (skip dispatch on trivial prompts) and the subagent (own silence rule) — dispatch is best-effort, not a hard gate.
 
 ## Requirements
 
@@ -114,34 +103,21 @@ Skill (Opus + extended thinking)
 | `response_critic.timeout_seconds` | `30` | Background worker `claude -p` budget |
 | `response_critic.queue_ttl_seconds` | `3600` | Queue entries older than this are dropped on consume |
 | `skill.enabled` | `true` | Master toggle for the `/devils-advocate` skill |
-| `output_language` | unset | When set (e.g. `"Korean"`), forces user-facing strings produced by the response-critic into that language. When unset, falls back to `$LC_ALL` / `$LANG`, then English |
-
-The `output_language` priority chain is: `config.output_language` > `LC_ALL` > `LANG` > `English`.
+| `output_language` | unset | See [Output language](#output-language) below |
 
 ## Output language
 
-The response-critic produces user-facing strings (the `concerns` field) in a runtime-chosen language:
+The response-critic emits user-facing strings (`concerns`) in a runtime-chosen language. Priority: `config.output_language` > `$LC_ALL` > `$LANG` > English.
 
-1. `config.json`'s `output_language` field — explicit override (e.g. `"Korean"`)
-2. The `LC_ALL` environment variable (POSIX locale, e.g. `ko_KR.UTF-8`)
-3. The `LANG` environment variable (POSIX locale)
-4. English (final fallback)
+Mapped: English, Korean, Japanese, Chinese, Spanish, French, German, Portuguese, Russian. Unknown locales fall back to English. To add a language, extend `locale_to_language` in `lib/common.sh`.
 
-Currently mapped language names: **English**, **Korean**, **Japanese**, **Chinese**, **Spanish**, **French**, **German**, **Portuguese**, **Russian**. Unknown locale codes silently fall back to English. To add a language, extend the `locale_to_language` switch in `lib/common.sh` and submit a PR.
-
-The `reasoning` field in the model output stays in English regardless of the locale, so the maintainer can read debug logs uniformly.
-
-The prompt-critic dispatches the `devils-advocate-critic` subagent and does not honor `output_language` itself — the subagent's output language follows the main Claude's natural conversational language, which typically matches what the user is writing in.
+The `reasoning` field stays English regardless. The prompt-critic does not honor this setting — its output follows the main Claude's conversational language.
 
 ## Privacy
 
-This plugin sends data to the Anthropic API on **every** user turn and **every** Claude response, in the projects where it is enabled:
+This plugin sends data to the Anthropic API on **every assistant turn** (response-critic, always) and on **prompts where the main Claude opts to dispatch the subagent** (prompt-critic, sometimes). The `/devils-advocate` skill sends file contents and project structure when manually invoked.
 
-- `prompt-critic` injects an instruction into the main session every turn. When the main Claude decides to dispatch, the user prompt + subagent reasoning is sent to Opus. When it does not dispatch, no extra API call is made.
-- `response-critic` sends Claude's **response text** to Haiku or Opus on **every** assistant turn (asynchronous background)
-- `/devils-advocate` skill, when invoked, may send file contents and project structure to Opus
-
-If you work on code that should not leave your environment, do not enable this plugin in those projects. There is currently no per-project disable option (planned for a future version); the recommended workaround is to disable the plugin globally and re-enable it only in non-sensitive workspaces.
+Do not enable this plugin in projects whose contents must not leave your environment. There is no per-project disable yet (planned); disable globally and re-enable only in non-sensitive workspaces.
 
 ## Development
 
