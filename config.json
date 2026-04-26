@@ -1,10 +1,6 @@
 {
   "prompt_critic": {
-    "enabled": true,
-    "model": "claude-haiku-4-5-20251001",
-    "min_severity": "medium",
-    "max_questions": 3,
-    "timeout_seconds": 10
+    "enabled": true
   },
   "response_critic": {
     "enabled": true,
