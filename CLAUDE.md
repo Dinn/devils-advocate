@@ -4,11 +4,11 @@ This file is automatically pulled into context when you open a Claude Code sessi
 
 ## Project overview
 
-A multi-axis confirmation-bias guard for Claude Code. Three components:
+A complementary confirmation-bias guard for Claude Code. Three components:
 
-- **prompt-critic** (UserPromptSubmit hook, Haiku, synchronous): challenges unverified assumptions in the user's prompt, in question form
-- **response-critic** (Stop hook, Haiku → Opus auto-escalate, asynchronous): identifies hidden risks in the assistant's last response, in declarative form, and queues them for injection on the next turn
-- **/devils-advocate** (manual skill, Opus + extended thinking): explicit deep critique. The Independence Gate dispatches the `devils-advocate-critic` subagent when the target was authored by Claude in the same session
+- **prompt-critic** (UserPromptSubmit hook, instruction-driven): injects a `system-reminder` asking the main Claude to judge whether the prompt carries decision content and, if so, to dispatch the `devils-advocate-critic` subagent (Agent tool) before responding. Best-effort: dispatch is subject to the model's instruction-following, not a hard guarantee.
+- **response-critic** (Stop hook, Haiku → Opus auto-escalate, asynchronous): a background worker calls `claude -p` on the assistant's last turn, severity-gates the output, and queues medium/high findings for injection on the next `UserPromptSubmit`.
+- **/devils-advocate** (manual skill, Opus + extended thinking): explicit deep critique. The Independence Gate dispatches the `devils-advocate-critic` subagent when the target was authored by Claude in the same session.
 
 ## Directory layout
 
@@ -57,8 +57,10 @@ There is no fallback to `$HOME/.claude/devils-advocate`. Scripts run only in a v
 ## Hook behavior
 
 - Every hook is **fail-silent and exits 0**. The user's work must never be blocked.
-- Recursion guard: any `claude -p` invocation from inside a hook must be prefixed with `DEVILS_ADVOCATE_INNER=1`. Hook entrypoints check this at the top and exit immediately to break loops.
-- Silence first: only inject when severity ≥ medium. A reasoning-hash dedup cache suppresses repeated noise.
+- Recursion guard: any `claude -p` invocation from inside a hook (currently only the response-critic background worker) must be prefixed with `DEVILS_ADVOCATE_INNER=1`. Hook entrypoints check this at the top and exit immediately to break loops.
+- Silence first:
+  - **response-critic** drops severity below `medium` and deduplicates by reasoning hash before enqueuing.
+  - **prompt-critic** delegates silence: the main Claude decides whether to dispatch the subagent on a given prompt, and the subagent enforces its own silence rule on what it sees. There is **no hard guarantee that dispatch happens** — this plugin is a complementary guard, not a hard gate.
 
 ## Output language (locale)
 

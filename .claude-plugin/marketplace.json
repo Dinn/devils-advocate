@@ -7,7 +7,7 @@
     {
       "name": "devils-advocate",
       "source": "./",
-      "description": "Multi-axis confirmation-bias guard for Claude Code: real-time prompt critique, async response critique, and on-demand deep critique with Independence Gate."
+      "description": "Complementary confirmation-bias guard for Claude Code: subagent-dispatched prompt review, async response review, and on-demand deep critique with Independence Gate."
     }
   ]
 }

@@ -1,6 +1,6 @@
 {
   "name": "devils-advocate",
-  "description": "Multi-axis confirmation-bias guard for Claude Code. Three components: real-time prompt critique (UserPromptSubmit, Haiku), async response critique with smart escalation (Stop, Haiku→Opus), on-demand deep critique with Independence Gate (/devils-advocate, Opus).",
+  "description": "Complementary confirmation-bias guard for Claude Code. Three components: prompt-critic (UserPromptSubmit hook, injects a system-reminder asking the main Claude to dispatch the devils-advocate-critic subagent on decision-content prompts), response-critic (Stop hook, Haiku→Opus async background review), and the /devils-advocate skill (Opus + extended thinking, manual deep critique with Independence Gate).",
   "author": {
     "name": "Dinn",
     "url": "https://github.com/Dinn"
