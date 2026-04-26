@@ -1,16 +1,26 @@
 #!/bin/bash
 # UserPromptSubmit hook — prompt-critic entry point.
 #
-# Responsibilities:
-#   1. Recursion guard (exit if called from inside claude -p).
-#   2. Consume any pending response-critic entries from session queue.
-#   3. Synchronously call prompt-critic Haiku; inject if severity >= min_severity.
+# This hook does NOT call `claude -p` directly. Instead it:
+#   1. Drains the previous-turn response-critic queue (if any)
+#   2. Injects an instruction asking the main Claude to judge whether the
+#      user's prompt carries decision content; if so, to dispatch the
+#      devils-advocate-critic subagent (Agent tool) before responding.
 #
-# All failures are silent (exit 0 with no stdout). The user's work is NEVER blocked.
+# Why this design (vs. the earlier `claude -p` synchronous call):
+#   - claude -p cold start in this environment is roughly 5 seconds, so
+#     even a 10-second timeout was unreliable and produced 100 percent
+#     silent failures in practice.
+#   - The main Claude has natural-language judgment to filter decision
+#     content vs. trivial queries far more accurately than bash regex.
+#   - The subagent runs in the same Claude Code session (no fork/cold-start),
+#     and its findings flow naturally into the main response context.
+#
+# All failures are silent (exit 0 with no stdout). The user's work is never blocked.
 
 set -u
 
-# Recursion guard: if we're already inside a claude -p spawned by a hook, exit immediately.
+# Recursion guard — kept for safety even though this hook no longer calls claude -p.
 if [ "${DEVILS_ADVOCATE_INNER:-0}" = "1" ]; then
   exit 0
 fi
@@ -18,6 +28,7 @@ fi
 if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ]; then
   exit 0
 fi
+
 # shellcheck source=../lib/common.sh
 source "$CLAUDE_PLUGIN_ROOT/lib/common.sh"
 
@@ -28,9 +39,8 @@ fi
 
 STDIN=$(cat)
 SESSION_ID=$(printf '%s' "$STDIN" | jq -r '.session_id // ""' 2>/dev/null)
-USER_PROMPT=$(printf '%s' "$STDIN" | jq -r '.prompt // ""' 2>/dev/null)
 
-# === Step 1: Consume queue (previous turn's response-critic results) ===
+# === Step 1: Drain previous-turn queue (response-critic results) ===
 if [ -n "$SESSION_ID" ]; then
   QUEUE_FILE="$DA_QUEUE_DIR/${SESSION_ID}.jsonl"
   if [ -s "$QUEUE_FILE" ]; then
@@ -38,36 +48,34 @@ if [ -n "$SESSION_ID" ]; then
   fi
 fi
 
-# === Step 2: Synchronous prompt-critic call ===
-if [ -z "$USER_PROMPT" ]; then
-  debug_log "prompt-critic: empty user prompt, skip"
-  exit 0
-fi
+# === Step 2: Inject judgment instruction ===
+cat <<'EOF'
+<system-reminder>
+A devil's-advocate review may be warranted on the user's prompt above.
 
-MODEL=$(get_config prompt_critic.model)
-[ -z "$MODEL" ] && MODEL="claude-haiku-4-5-20251001"
+Before producing your main response, judge whether the prompt carries decision
+content that benefits from independent review:
 
-TIMEOUT=$(get_config prompt_critic.timeout_seconds)
-[ -z "$TIMEOUT" ] && TIMEOUT=5
+- Data loss risk (DROP/DELETE or other destructive operations)
+- Architecture, design, or refactoring choice
+- Security or auth implication
+- Production, deployment, or migration step
+- Breaking change to a public surface
+- Any case where an unverified assumption could be costly
 
-SYS_FILE="$DA_ROOT/prompts/prompt-critic.md"
+If YES: dispatch the `devils-advocate-critic` subagent (Agent tool, model: opus)
+to review this exact user prompt. Pass the user's prompt verbatim as the target.
+Incorporate the subagent's findings into your reasoning before producing your main
+response.
 
-debug_log "prompt-critic: calling model=$MODEL timeout=${TIMEOUT}s prompt_len=${#USER_PROMPT}"
+If NO (file read, simple lookup, clarifying question, code explanation, formatting,
+mechanical translation, etc.): proceed normally. Do not dispatch the subagent.
 
-RESULT=$(call_claude "$MODEL" "$SYS_FILE" "$USER_PROMPT" "$TIMEOUT") || {
-  debug_log "prompt-critic: call_claude failed, skip"
-  exit 0
-}
+The subagent enforces a strict silence rule — if it finds nothing substantive it
+returns a no-op result, and you proceed as if no critique existed. Forced
+objection is worse than no objection.
+</system-reminder>
+EOF
 
-# === Step 3: Severity filter + inject ===
-if ! should_inject "$RESULT" prompt_critic; then
-  exit 0
-fi
-
-# dedup
-if ! dedup_check "${SESSION_ID:-default}" "$RESULT"; then
-  exit 0
-fi
-
-format_reminder "prompt-critic" "$RESULT"
+debug_log "prompt-critic: injected judgment instruction (session=$SESSION_ID)"
 exit 0
