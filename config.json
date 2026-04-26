@@ -4,7 +4,7 @@
     "model": "claude-haiku-4-5-20251001",
     "min_severity": "medium",
     "max_questions": 3,
-    "timeout_seconds": 5
+    "timeout_seconds": 10
   },
   "response_critic": {
     "enabled": true,
