@@ -1,0 +1,13 @@
+{
+  "name": "devils-advocate",
+  "owner": {
+    "name": "Dinn"
+  },
+  "plugins": [
+    {
+      "name": "devils-advocate",
+      "source": "./",
+      "description": "Multi-axis confirmation-bias guard for Claude Code: real-time prompt critique, async response critique, and on-demand deep critique with Independence Gate."
+    }
+  ]
+}

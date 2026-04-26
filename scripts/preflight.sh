@@ -32,7 +32,7 @@ echo "[3/5] Python compile check"
 python3 -m compileall -q lib/
 
 echo "[4/5] JSON validity"
-for f in .claude-plugin/plugin.json hooks/hooks.json config.json; do
+for f in .claude-plugin/plugin.json .claude-plugin/marketplace.json hooks/hooks.json config.json; do
   jq empty "$f" >/dev/null
 done
 
