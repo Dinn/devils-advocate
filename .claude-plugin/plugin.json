@@ -1,0 +1,11 @@
+{
+  "name": "devils-advocate",
+  "version": "0.1.0",
+  "description": "Multi-axis confirmation-bias guard for Claude Code. Three components: real-time prompt critique (UserPromptSubmit, Haiku), async response critique with smart escalation (Stop, Haiku→Opus), on-demand deep critique with Independence Gate (/devils-advocate, Opus).",
+  "author": {
+    "name": "Dinn",
+    "url": "https://github.com/Dinn"
+  },
+  "repository": "https://github.com/Dinn/devils-advocate",
+  "license": "MIT"
+}

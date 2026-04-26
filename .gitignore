@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+
+# Belt-and-suspenders for runtime data: queue/dedup live in $CLAUDE_PLUGIN_DATA,
+# but if a script ever ran outside that context they could leak into the repo.
+queue/
+dedup/
+*.jsonl
